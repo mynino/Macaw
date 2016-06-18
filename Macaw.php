@@ -15,6 +15,7 @@ class Macaw {
   public static $routes = array();
   public static $methods = array();
   public static $callbacks = array();
+  public static $args=array();//保存参数
   public static $patterns = array(
       ':any' => '[^/]+',
       ':num' => '[0-9]+',
@@ -28,7 +29,9 @@ class Macaw {
   public static function __callstatic($method, $params) {
     $uri = dirname($_SERVER['PHP_SELF']).'/'.$params[0];
     $callback = $params[1];
+    $args=array_slice($params,2);
 
+    array_push(self::$args, $args);
     array_push(self::$routes, $uri);
     array_push(self::$methods, strtoupper($method));
     array_push(self::$callbacks, $callback);
@@ -64,6 +67,9 @@ class Macaw {
       $route_pos = array_keys(self::$routes, $uri);
       foreach ($route_pos as $route) {
         // Using an ANY option to match both GET and POST requests
+        $args=self::$args[$route];//我
+        
+
         if (self::$methods[$route] == $method || self::$methods[$route] == 'ANY') {
           $found_route = true;
 
@@ -83,14 +89,14 @@ class Macaw {
             $controller = new $segments[0]();
 
             // Call method
-            $controller->{$segments[1]}();
-
-            if (self::$halts) return;
+            // $controller->{$segments[1]}();
+            call_user_func_array(array($controller, $segments[1]), $args);
+            if ($found_route==true||self::$halts) return;
           } else {
             // Call closure
-            call_user_func(self::$callbacks[$route]);
+            call_user_func_array(self::$callbacks[$route],$args);//我
 
-            if (self::$halts) return;
+            if ($found_route==true||self::$halts) return;
           }
         }
       }
@@ -101,8 +107,8 @@ class Macaw {
         if (strpos($route, ':') !== false) {
           $route = str_replace($searches, $replaces, $route);
         }
-
-        if (preg_match('#^' . $route . '$#', $uri, $matched)) {
+        if (preg_match('#^'. $route.'$#', $uri, $matched)) {
+          $args=self::$args[$pos];
           if (self::$methods[$pos] == $method || self::$methods[$pos] == 'ANY') {
             $found_route = true;
 
@@ -127,14 +133,14 @@ class Macaw {
               if(!method_exists($controller, $segments[1])) {
                 echo "controller and action not found";
               } else {
-                call_user_func_array(array($controller, $segments[1]), $matched);
+                call_user_func_array(array($controller, $segments[1]), $args);
               }
 
-              if (self::$halts) return;
+              if ($found_route==true||self::$halts) return;
             } else {
-              call_user_func_array(self::$callbacks[$pos], $matched);
+              call_user_func_array(self::$callbacks[$pos], $args);
 
-              if (self::$halts) return;
+              if ($found_route==true||self::$halts) return;
             }
           }
         }
